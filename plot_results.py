@@ -1,59 +1,53 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 import os
 
-csv_filename = "paper_trading_log.csv"
+fig, ax = plt.subplots(figsize=(10, 5))
+fig.canvas.manager.set_window_title('📊 Monitor de Rendimiento')
 
-def plot_equity_curve():
-    if not os.path.exists(csv_filename):
-        print(f"❌ No se encontró el archivo {csv_filename}. Dejá correr el bot primero.")
+def actualizar_grafico(i):
+    archivo_csv = "paper_trading_log.csv"
+    
+    if not os.path.exists(archivo_csv):
         return
+        
+    try:
+        # Leemos el CSV
+        df = pd.read_csv(archivo_csv)
+        
+        if len(df) == 0:
+            return
+            
+        df['Balance_Acumulado'] = df['Profit_USDC'].cumsum()
+        
+        ax.clear()
+        
+        # Linea de rendimiento
+        ax.plot(df.index + 1, df['Balance_Acumulado'], marker='o', linestyle='-', color='#00d1b2', linewidth=2)
+        
+        if df['Balance_Acumulado'].iloc[-1] >= 0:
+            ax.fill_between(df.index + 1, df['Balance_Acumulado'], 0, alpha=0.2, color='green')
+        else:
+            ax.fill_between(df.index + 1, df['Balance_Acumulado'], 0, alpha=0.2, color='red')
 
-    # 1. Leer los datos
-    df = pd.read_csv(csv_filename)
-    
-    if df.empty:
-        print("⚠️ El CSV está vacío. Aún no hay trades registrados.")
-        return
+        # Linea de Cero (Breakeven)
+        ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+        
+        ax.set_title(f"Balance Simulado en Tiempo Real | Trades: {len(df)} | P&L: ${df['Balance_Acumulado'].iloc[-1]:.2f} USDC", fontsize=14, fontweight='bold')
+        ax.set_xlabel("Número de Operación (Trade)", fontsize=10)
+        ax.set_ylabel("Ganancia Acumulada (USDC)", fontsize=10)
+        ax.grid(True, linestyle=':', alpha=0.7)
+        
+        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+        
+    except Exception as e:
+        # Si el bot justo está escribiendo el CSV, ignoramos el error y esperamos al próximo ciclo
+        pass
 
-    # 2. Calcular el Profit Acumulado
-    df['Cumulative_Profit'] = df['Profit_USDC'].cumsum()
+# Actualizamos la funcion cada 3 segundos
+ani = FuncAnimation(fig, actualizar_grafico, interval=3000, cache_frame_data=False)
 
-    # 3. Configurar el gráfico
-    plt.figure(figsize=(12, 6))
-    
-    # Dibujar la línea principal
-    plt.plot(df.index + 1, df['Cumulative_Profit'], label='Balance Acumulado', color='#2ca02c', linewidth=2)
-
-    # 4. Marcar los trades ganados y perdidos con colores
-    ganados = df[df['Status'] == 'SUCCESS']
-    perdidos = df[df['Status'] == 'TIMEOUT']
-
-    plt.scatter(ganados.index + 1, ganados['Cumulative_Profit'], color='green', label='Trade Exitoso', zorder=5, s=50)
-    plt.scatter(perdidos.index + 1, perdidos['Cumulative_Profit'], color='red', label='Timeout / Pérdida', zorder=5, s=50)
-
-    # 5. Estética del gráfico
-    plt.title('Rendimiento de la Estrategia: Paper Bot', fontsize=14, fontweight='bold')
-    plt.xlabel('Número de Trade', fontsize=12)
-    plt.ylabel('Profit Acumulado (USDC)', fontsize=12)
-    plt.axhline(0, color='black', linestyle='--', linewidth=1) # Línea de base cero
-    plt.grid(True, linestyle=':', alpha=0.7)
-    plt.legend()
-    
-    # Ajustar etiquetas del eje X a números enteros
-    plt.xticks(df.index + 1)
-
-    # 6. Mostrar métricas clave en consola
-    print("\n📊 --- RESUMEN DE RENDIMIENTO ---")
-    print(f"Total Trades: {len(df)}")
-    print(f"Win Rate: {(len(ganados) / len(df)) * 100:.1f}%")
-    print(f"Profit Total: ${df['Profit_USDC'].sum():.2f} USDC")
-    print(f"Mejor Trade: +${df['Profit_USDC'].max():.2f} USDC")
-    print(f"Peor Trade: ${df['Profit_USDC'].min():.2f} USDC")
-    print("---------------------------------\n")
-
-    # Mostrar gráfico
-    plt.show()
-
-if __name__ == "__main__":
-    plot_equity_curve()
+print("📈 Abriendo monitor en tiempo real... (Dejá esta ventana abierta)")
+plt.tight_layout()
+plt.show()

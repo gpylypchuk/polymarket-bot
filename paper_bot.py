@@ -66,7 +66,7 @@ print("=======================================")
 print(f"🧪 PAPER TRADING V8 - MODO BARREDORA | {MAX_TESTS} CICLOS")
 print("⚡ Optimizaciones: Sesión Persistente HTTP + Direct JSON")
 print("⚙️ Gatillos Anticipados: >$25 (70s) | >$15 (40s)")
-print("🕵️‍♂️ Rango de entrada: $0.90 a $0.98")
+print("🕵️‍♂️ Rango de entrada: $0.93 a $0.98")
 print("=======================================\n")
 
 # --- 4. BUCLE PRINCIPAL ---
@@ -169,7 +169,7 @@ while test_count < MAX_TESTS:
                             if target_sim <= p_entrada_sim: target_sim = p_entrada_sim + 0.01 
                             
                             # 🛡️ NUEVO: Definimos el Stop Loss
-                            stop_loss_sim = 0.60
+                            stop_loss_sim = 0.30
 
                             print(f"\n🚀 [SEÑAL VÁLIDA] Disparando {target_outcome} a ${p_entrada_sim:.2f}")
                             print(f"🎯 TAKE PROFIT: ${target_sim:.2f}")
