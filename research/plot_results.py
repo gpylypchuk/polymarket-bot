@@ -7,7 +7,7 @@ fig, ax = plt.subplots(figsize=(10, 5))
 fig.canvas.manager.set_window_title('📊 Monitor de Rendimiento')
 
 def actualizar_grafico(i):
-    archivo_csv = "paper_trading_log.csv"
+    archivo_csv = os.path.join("logs", "paper_trading_log.csv")
     
     if not os.path.exists(archivo_csv):
         return

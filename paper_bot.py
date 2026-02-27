@@ -51,7 +51,7 @@ simulated_balance = 0.0
 trades_ganados = 0
 trades_perdidos = 0
 
-csv_filename = "paper_trading_log.csv"
+csv_filename = os.path.join("logs", "paper_trading_bot.csv")
 if not os.path.exists(csv_filename):
     with open(csv_filename, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -66,7 +66,7 @@ print("=======================================")
 print(f"🧪 PAPER TRADING V8 - MODO BARREDORA | {MAX_TESTS} CICLOS")
 print("⚡ Optimizaciones: Sesión Persistente HTTP + Direct JSON")
 print("⚙️ Gatillos Anticipados: >$25 (70s) | >$15 (40s)")
-print("🕵️‍♂️ Rango de entrada: $0.93 a $0.98")
+print("🕵️‍♂️ Rango de entrada: $0.96 a $0.98")
 print("=======================================\n")
 
 # --- 4. BUCLE PRINCIPAL ---
@@ -161,7 +161,7 @@ while test_count < MAX_TESTS:
                             diff = btc_price_live - p_strike if trend_up else p_strike - btc_price_live
                             print(f"🔍 [RAYOS X] Evaluando {target_outcome} | Ask: ${best_ask:.2f} | Diff BTC: ${abs(diff):.2f}")
 
-                        if 0.93 <= best_ask <= 0.98: 
+                        if 0.96 <= best_ask <= 0.98: 
                             p_entrada_sim = best_ask
                             shares_sim = 5.0
                             costo_sim = shares_sim * p_entrada_sim
@@ -183,7 +183,7 @@ while test_count < MAX_TESTS:
                             
                         elif best_ask > 0.98:
                             if int(seconds_left * 10) % 20 == 0: print(f"⚠️ [STALKING] Ask muy caro (${best_ask:.2f}).")
-                        elif best_ask < 0.93:
+                        elif best_ask < 0.96:
                             if int(seconds_left * 10) % 20 == 0: print(f"⚠️ [IGNORANDO] Ask muy barato (${best_ask:.2f}).")
                 
                 elif int(seconds_left) % 10 == 0:
