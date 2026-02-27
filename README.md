@@ -32,7 +32,7 @@ La estrategia sufre del síndrome de *"juntar monedas adelante de una aplanadora
 
 ### El Criterio de Kelly Negativo
 
-Analizando la muestra de 111 trades, obtuvimos los siguientes promedios:
+Analizando la muestra de 111 trades se obtuvieron los siguientes promedios:
 * **Aciertos:** 108 trades (Ganancia promedio: $0.079)
 * **Fallos:** 3 trades (Pérdida promedio: $3.75 debido al slippage extremo por falta de liquidez).
 * **Win Rate ($p$):** 97.29%
