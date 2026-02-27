@@ -24,7 +24,7 @@ Para filtrar falsos movimientos, el bot exige una confirmación brutal de tenden
 
 ## 🩸 La Autopsia: Por qué NO es rentable
 
-Tras simular 111 operaciones reales en el Order Book de Polymarket, los datos arrojaron un resultado contraintuitivo pero irrefutable en el trading cuantitativo: **Tener razón casi siempre no equivale a ganar dinero.**
+Tras simular 111 operaciones reales en el Order Book de Polymarket, los datos arrojaron un resultado contraintuitivo pero irrefutable.
 
 
 
