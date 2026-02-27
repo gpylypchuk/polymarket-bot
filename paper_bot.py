@@ -5,7 +5,6 @@ from collections import deque
 
 load_dotenv()
 
-# --- 1. SENSOR BURSÁTIL (Binance WS) ---
 price_buffer = deque(maxlen=3)
 btc_price_live = 0.0
 
@@ -21,7 +20,6 @@ def run_binance_ws():
 
 threading.Thread(target=run_binance_ws, daemon=True).start()
 
-# --- 2. MOTOR HTTP DE ALTA VELOCIDAD (Bypass SDK) ---
 fast_session = requests.Session()
 fast_session.headers.update({'User-Agent': 'Mozilla/5.0'})
 
@@ -44,14 +42,13 @@ def get_raw_best_prices(token_id):
     except Exception:
         return None, None
 
-# --- 3. MÉTRICAS Y LOG DE SIMULACIÓN ---
-MAX_TESTS = 288
+MAX_TESTS = 200
 test_count = 0
 simulated_balance = 0.0
 trades_ganados = 0
 trades_perdidos = 0
 
-csv_filename = os.path.join("logs", "paper_trading_bot.csv")
+csv_filename = os.path.join("logs", "paper_trading_log.csv")
 if not os.path.exists(csv_filename):
     with open(csv_filename, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -69,13 +66,11 @@ print("⚙️ Gatillos Anticipados: >$25 (70s) | >$15 (40s)")
 print("🕵️‍♂️ Rango de entrada: $0.96 a $0.98")
 print("=======================================\n")
 
-# --- 4. BUCLE PRINCIPAL ---
 while test_count < MAX_TESTS:
     now_ts = int(time.time())
     start_slot = (now_ts // 300) * 300
     slug = f"btc-updown-5m-{start_slot}"
     
-    # SETUP DEL SLOT (REST Gamma API + Binance Klines)
     try:
         r = requests.get(f"https://gamma-api.polymarket.com/events?slug={slug}")
         event_data = r.json()
@@ -101,14 +96,12 @@ while test_count < MAX_TESTS:
         print(f"⚠️ Error cargando slot: {e}")
         time.sleep(5); continue
 
-    # Sincronización
     while btc_price_live == 0 or len(price_buffer) < 3: 
         time.sleep(1)
 
     market_active = True
     trade_open = False 
 
-    # --- 5. BUCLE DE MONITOREO DE ALTA FRECUENCIA ---
     while market_active:
         try:
             seconds_left = (end_date - datetime.now(timezone.utc)).total_seconds()
@@ -122,7 +115,6 @@ while test_count < MAX_TESTS:
                     if (token_outcome == "Up" and btc_price_live >= p_strike) or \
                        (token_outcome == "Down" and btc_price_live < p_strike):
                         
-                        # ¡Ganamos! Cada acción ahora vale $1.00 USDC
                         ingreso_final = 1.00 * shares_sim
                         profit_neto = ingreso_final - costo_sim
                         simulated_balance += profit_neto
@@ -134,7 +126,6 @@ while test_count < MAX_TESTS:
                         log_trade(start_slot, token_outcome, shares_sim, p_entrada_sim, target_sim, 1.00, profit_neto, "EXPIRATION_WIN")
                     
                     else:
-                        # Perdimos. BTC se dio vuelta en el último segundo. El token vale $0.00.
                         simulated_balance -= costo_sim
                         trades_perdidos += 1
                         
@@ -142,11 +133,8 @@ while test_count < MAX_TESTS:
                         log_trade(start_slot, token_outcome, shares_sim, p_entrada_sim, target_sim, 0.00, -costo_sim, "EXPIRATION_LOSS")
                 market_active = False; break
 
-            # A. ESTADO: BUSCANDO ENTRADA
             if not trade_open:
-                # Faltando 45s, exigimos $40 de diferencia (antes era $25 a los 70s)
                 hot_zone_extrema = (0 < seconds_left <= 45) and all(abs(p - p_strike) > 40 for p in price_buffer)
-                # Faltando 20s, exigimos $25 de diferencia (antes era $15 a los 40s)
                 hot_zone_normal = (0 < seconds_left <= 20) and all(abs(p - p_strike) > 25 for p in price_buffer)
 
                 if hot_zone_extrema or hot_zone_normal:
@@ -170,7 +158,7 @@ while test_count < MAX_TESTS:
                             if target_sim > 0.99: target_sim = 0.99
                             if target_sim <= p_entrada_sim: target_sim = p_entrada_sim + 0.01 
                             
-                            # 🛡️ NUEVO: Definimos el Stop Loss
+                            # Stop Loss
                             stop_loss_sim = 0.30
 
                             print(f"\n🚀 [SEÑAL VÁLIDA] Disparando {target_outcome} a ${p_entrada_sim:.2f}")
@@ -191,11 +179,10 @@ while test_count < MAX_TESTS:
                 
                 time.sleep(0.1) 
 
-            # B. ESTADO: MONITOREANDO SALIDA (Con Stop Loss)
             elif trade_open:
                 current_bid, _ = get_raw_best_prices(token_activo)
                 
-                # 1. Escenario Ganador: Alcanzamos el Take Profit
+                # Alcanzamos el Take Profit
                 if current_bid and current_bid >= target_sim:
                     profit_neto = (current_bid * shares_sim) - costo_sim
                     simulated_balance += profit_neto
@@ -208,10 +195,10 @@ while test_count < MAX_TESTS:
                     time.sleep(seconds_left + 5) 
                     market_active = False; break
                     
-                # 2. 🛡️ NUEVO: Escenario Perdedor (Activación del Stop Loss)
+                # Escenario Perdedor
                 elif current_bid and current_bid <= stop_loss_sim:
                     profit_neto = (current_bid * shares_sim) - costo_sim
-                    simulated_balance += profit_neto  # Sumamos un número negativo (pérdida)
+                    simulated_balance += profit_neto
                     trades_perdidos += 1
                     
                     print(f"\n🛑 ¡STOP LOSS ACTIVADO! El mercado colapsó.")
@@ -222,7 +209,6 @@ while test_count < MAX_TESTS:
                     time.sleep(seconds_left + 5) 
                     market_active = False; break
                     
-                # 3. Escenario de Espera
                 else:
                     if int(seconds_left * 10) % 20 == 0:
                         print(f"⏳ Monitoreando... Bid actual: ${current_bid} (Target: ${target_sim:.2f} | Stop: ${stop_loss_sim:.2f})")
