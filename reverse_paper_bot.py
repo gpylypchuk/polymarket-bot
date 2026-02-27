@@ -32,13 +32,13 @@ def get_raw_best_prices(token_id):
     except:
         return None, None
 
-MAX_TESTS = 30
+MAX_TESTS = 200
 test_count = 0
 simulated_balance = 0.0
 trades_ganados = 0
 trades_perdidos = 0
 
-csv_filename = "paper_trading_log.csv"
+csv_filename = os.path.join("logs", "reversion_experiment_log.csv")
 if not os.path.exists(csv_filename):
     with open(csv_filename, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -52,7 +52,7 @@ def log_trade(slot, outcome, shares, p_in, target, p_out, max_bid, profit, statu
 print("=======================================")
 print(f"🧪 PAPER TRADING V8 | {MAX_TESTS} CICLOS")
 print("🎯 Objetivo: Compras a $0.05 (Lotería)")
-print("⚡ Salida Dual: TP 0.90 o Expiración $1.00")
+print("⚡ Salida: Hybrid (TP1 $0.25 + Free Roll a $1.00)")
 print("=======================================\n")
 
 while test_count < MAX_TESTS:
@@ -100,6 +100,7 @@ while test_count < MAX_TESTS:
                     test_count += 1
                 market_active = False; break
 
+            # A. ESTADO: BUSCANDO ENTRADA (MODO HYBRID)
             if not trade_open:
                 hot_zone_extrema = (0 < seconds_left <= 45) and all(abs(p - p_strike) > 40 for p in price_buffer)
                 hot_zone_normal = (0 < seconds_left <= 20) and all(abs(p - p_strike) > 25 for p in price_buffer)
@@ -116,21 +117,26 @@ while test_count < MAX_TESTS:
                             diff = btc_price_live - p_strike
                             print(f"🔍 [CISNE NEGRO] BTC Diff: ${diff:.2f} | Evaluando la contra ({target_outcome}) a ${best_ask:.2f}")
 
-                        if 0.01 <= best_ask <= 0.04: 
+                        if 0.01 <= best_ask <= 0.03: 
                             p_entrada_sim = best_ask
                             shares_sim = 20.0  
                             costo_sim = shares_sim * p_entrada_sim
-                            target_sim = 0.90 
+                            
+                            # VARIABLES HYBRID
+                            target_parcial = 0.25      # El TP para recuperar la inversión
+                            target_sim = 1.00
+                            mitad_shares = shares_sim / 2
+                            partial_sold = False
+                            max_bid_seen = 0.0
 
-                            print(f"\n🚀 [LOTERÍA MATEMÁTICA] Comprando {shares_sim} shares de {target_outcome} a ${p_entrada_sim:.2f}")
+                            print(f"\n🚀 [HYBRID ENTRY] Comprando {shares_sim} shares de {target_outcome} a ${p_entrada_sim:.2f}")
+                            print(f"🎯 TP1 (Mitad): ${target_parcial:.2f} | 🌙 TP2: Expiración/Milagro")
                             
                             trade_open = True
                             token_activo = target_token_id 
                             token_outcome = target_outcome
                             
-                            max_bid_seen = 0.0 
-                            
-                        elif best_ask > 0.04:
+                        elif best_ask > 0.03:
                             if int(seconds_left * 10) % 20 == 0: print(f"⚠️ [STALKING] Contra muy cara (${best_ask:.2f}).")
                 
                 elif int(seconds_left) % 10 == 0:
@@ -138,6 +144,7 @@ while test_count < MAX_TESTS:
                 
                 time.sleep(0.1) 
 
+            #MONITOREANDO SALIDA (SCALPING + FREE ROLL)
             elif trade_open:
                 current_bid, _ = get_raw_best_prices(token_activo)
                 
@@ -145,20 +152,26 @@ while test_count < MAX_TESTS:
                     if current_bid > max_bid_seen:
                         max_bid_seen = current_bid
                 
-                if current_bid and current_bid >= target_sim:
-                    profit_neto = (current_bid * shares_sim) - costo_sim
-                    simulated_balance += profit_neto
-                    trades_ganados += 1
-                    print(f"\n✅ ¡CISNE NEGRO CAZADO! Venta a ${current_bid:.2f}! Profit: +${profit_neto:.2f}")
-                    log_trade(start_slot, token_outcome, shares_sim, p_entrada_sim, target_sim, current_bid, max_bid_seen, profit_neto, "BLACK_SWAN_SUCCESS")
-                    test_count += 1
-                    time.sleep(seconds_left + 5) 
-                    market_active = False; break
+                #SALIDA PARCIAL
+                if current_bid and current_bid >= target_parcial and not partial_sold:
+                    costo_mitad = mitad_shares * p_entrada_sim
+                    profit_parcial = (current_bid * mitad_shares) - costo_mitad
+                    simulated_balance += profit_parcial
+                    trades_ganados += 1 
+                    
+                    print(f"\n💸 ¡TP1 ALCANZADO! Vendiendo {mitad_shares} shares a ${current_bid:.2f} | Profit Asegurado: +${profit_parcial:.2f}")
+                    print(f"🎰 ¡FREE ROLL ACTIVADO! Dejando {mitad_shares} shares riesgo cero hasta el final.")
+                    
+                    log_trade(start_slot, token_outcome, mitad_shares, p_entrada_sim, target_parcial, current_bid, max_bid_seen, profit_parcial, "PARTIAL_PROFIT")
+                    
+                    partial_sold = True
+                    shares_sim = mitad_shares
+                    costo_sim = shares_sim * p_entrada_sim 
                     
                 else:
                     if int(seconds_left * 10) % 20 == 0:
-                        # Rebote maximo
-                        print(f"⏳ Esperando el milagro... Bid actual: ${current_bid} | Max Rebote Visto: ${max_bid_seen:.2f} (Target: ${target_sim:.2f})")
+                        estado = "FREE ROLL 🌙" if partial_sold else f"Buscando TP1 (${target_parcial:.2f})"
+                        print(f"⏳ {estado} | Bid actual: ${current_bid} | Max Rebote: ${max_bid_seen:.2f}")
                 
                 time.sleep(0.1)
         except:
