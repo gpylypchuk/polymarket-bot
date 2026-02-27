@@ -144,8 +144,10 @@ while test_count < MAX_TESTS:
 
             # A. ESTADO: BUSCANDO ENTRADA
             if not trade_open:
-                hot_zone_extrema = (0 < seconds_left <= 70) and all(abs(p - p_strike) > 25 for p in price_buffer)
-                hot_zone_normal = (0 < seconds_left <= 40) and all(abs(p - p_strike) > 15 for p in price_buffer)
+                # Faltando 45s, exigimos $40 de diferencia (antes era $25 a los 70s)
+                hot_zone_extrema = (0 < seconds_left <= 45) and all(abs(p - p_strike) > 40 for p in price_buffer)
+                # Faltando 20s, exigimos $25 de diferencia (antes era $15 a los 40s)
+                hot_zone_normal = (0 < seconds_left <= 20) and all(abs(p - p_strike) > 25 for p in price_buffer)
 
                 if hot_zone_extrema or hot_zone_normal:
                     trend_up = all((p - p_strike) > 0 for p in price_buffer)
