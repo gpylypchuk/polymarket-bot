@@ -4,8 +4,8 @@ import os
 def analyze_performance():
     log_dir = "logs"
     files = {
-        "Ultra-Conservador": "paper_trading_log.csv", # Ajustá si el nombre es diferente
-        "Reversión Lab": "reversion_experiment_log.csv"
+        "Reversion Lab V2": "full_exit_experiment_log_v2.csv",
+        "Reversion Lab V1": "full_exit_experiment_log_v1.csv"
     }
 
     print("📊 --- COMPARATIVA DE ESTRATEGIAS --- 📊\n")
