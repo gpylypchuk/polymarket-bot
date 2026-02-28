@@ -51,6 +51,10 @@ $$f^* = -0.312$$
 
 **Resultado: Kelly de -31.2%.** Matemáticamente, la fórmula exige no invertir capital en este modelo.
 
+
+<img width="1200" height="600" alt="📊_Monitor_de_Rendimiento_Cuantitativo" src="https://github.com/user-attachments/assets/89ea5fd3-283e-4341-82ec-f454ab187fb9" />
+
+
 ---
 
 ## 🛠️ Stack Tecnológico
