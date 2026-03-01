@@ -103,8 +103,8 @@ while test_count < MAX_TESTS:
                 market_active = False; break
 
             if not trade_open:
-                hot_zone_extrema = (0 < seconds_left <= 45) and all(abs(p - p_strike) > 40 for p in price_buffer)
-                hot_zone_normal = (0 < seconds_left <= 20) and all(abs(p - p_strike) > 25 for p in price_buffer)
+                hot_zone_extrema = (0 < seconds_left <= 45) and all(40 < abs(p - p_strike) < 100 for p in price_buffer)
+                hot_zone_normal = (0 < seconds_left <= 20) and all(25 < abs(p - p_strike) < 70 for p in price_buffer)
 
                 if hot_zone_extrema or hot_zone_normal:
                     trend_up = all((p - p_strike) > 0 for p in price_buffer)
