@@ -35,10 +35,10 @@ def get_raw_best_prices(token_id):
 MAX_TESTS = 200
 test_count = 0
 simulated_balance = 0.0
-trades_ganados = 0
-trades_perdidos = 0
+wins = 0
+losses = 0
 
-csv_filename = os.path.join("logs", "full_exit_experiment_log_v2.csv")
+csv_filename = os.path.join("logs", "full_exit_probe_log.csv")
 os.makedirs("logs", exist_ok=True)
 
 if not os.path.exists(csv_filename):
@@ -46,15 +46,15 @@ if not os.path.exists(csv_filename):
         writer = csv.writer(file)
         writer.writerow(["Timestamp", "Slot", "Outcome", "Shares", "Entry_Price", "Target_Price", "Exit_Price", "Max_Bid_Seen", "Profit_USDC", "Status"])
 
-def log_trade(slot, outcome, shares, p_in, target, p_out, max_bid, profit, status):
+def log_trade(slot, outcome, shares, entry_price, target, exit_price, max_bid, profit, status):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(csv_filename, mode='a', newline='') as f:
-        csv.writer(f).writerow([timestamp, slot, outcome, round(shares, 2), p_in, target, p_out, max_bid, round(profit, 4), status])
+        csv.writer(f).writerow([timestamp, slot, outcome, round(shares, 2), entry_price, target, exit_price, max_bid, round(profit, 4), status])
 
 print("=======================================")
-print(f"🧪 PAPER TRADING | BOT 3: FULL EXIT SCALPER")
-print(f"🎯 Rango de Entrada: 0.01 - 0.02")
-print("⚡ Salida Total: TP 0.25 (Sin Free Roll)")
+print(f"🧪 PAPER TRADING | BOT: FULL EXIT PROBE")
+print(f"🎯 Entry: 0.01 - 0.02 | Zones: 25-70 / 40-100")
+print("⚡ Full Exit: TP 0.25 (Continuous Monitoring)")
 print("=======================================\n")
 
 while test_count < MAX_TESTS:
@@ -80,6 +80,9 @@ while test_count < MAX_TESTS:
 
     market_active = True
     trade_open = False 
+    has_sold = False
+    secured_profit = 0.0
+    actual_exit_price = 0.0
 
     while market_active:
         try:
@@ -87,26 +90,32 @@ while test_count < MAX_TESTS:
 
             if seconds_left <= 0:
                 if trade_open:
-                    win = (token_outcome == "Up" and btc_price_live >= p_strike) or \
-                          (token_outcome == "Down" and btc_price_live < p_strike)
-                    
-                    p_final = 1.00 if win else 0.00
-                    profit = (p_final * shares_sim) - costo_sim
-                    simulated_balance += profit
-                    if win: trades_ganados += 1
-                    else: trades_perdidos += 1
-                    
-                    status = "WIN_ORACLE" if win else "LOSS_ORACLE"
-                    print(f"{'🏆' if win else '💀'} RESULTADO ORÁCULO: {status} | Profit: ${profit:.2f}")
-                    log_trade(start_slot, token_outcome, shares_sim, p_entrada_sim, target_scalp, p_final, max_bid_seen, profit, status)
-                    test_count += 1
+                    if has_sold:
+                        print(f"🏁 CLOSE | Secured profit: ${secured_profit:.2f} | Real Max Bid Reached: ${max_bid_seen:.2f}")
+                        log_trade(start_slot, token_outcome, sim_shares, sim_entry_price, target_scalp, actual_exit_price, max_bid_seen, secured_profit, "FULL_PROFIT")
+                        test_count += 1
+                    else:
+                        # If not sold, we win or lose at the Oracle (as usual)
+                        win = (token_outcome == "Up" and btc_price_live >= p_strike) or \
+                              (token_outcome == "Down" and btc_price_live < p_strike)
+                        final_price = 1.00 if win else 0.00
+                        profit = (final_price * sim_shares) - sim_cost
+                        simulated_balance += profit
+                        if win: wins += 1
+                        else: losses += 1
+                        
+                        status = "WIN_ORACLE" if win else "LOSS_ORACLE"
+                        print(f"{'🏆' if win else '💀'} ORACLE RESULT: {status} | Profit: ${profit:.2f} | Max Bid Seen: ${max_bid_seen:.2f}")
+                        log_trade(start_slot, token_outcome, sim_shares, sim_entry_price, target_scalp, final_price, max_bid_seen, profit, status)
+                        test_count += 1
                 market_active = False; break
 
+            # A. STATE: LOOKING FOR ENTRY
             if not trade_open:
-                hot_zone_extrema = (0 < seconds_left <= 45) and all(40 < abs(p - p_strike) < 100 for p in price_buffer)
-                hot_zone_normal = (0 < seconds_left <= 20) and all(25 < abs(p - p_strike) < 70 for p in price_buffer)
+                extreme_hot_zone = (0 < seconds_left <= 45) and all(40 < abs(p - p_strike) < 100 for p in price_buffer)
+                normal_hot_zone = (0 < seconds_left <= 20) and all(25 < abs(p - p_strike) < 70 for p in price_buffer)
 
-                if hot_zone_extrema or hot_zone_normal:
+                if extreme_hot_zone or normal_hot_zone:
                     trend_up = all((p - p_strike) > 0 for p in price_buffer)
                     target_outcome = "Down" if trend_up else "Up" 
                     target_token_id = clob_ids[1] if trend_up else clob_ids[0]
@@ -116,60 +125,65 @@ while test_count < MAX_TESTS:
                     if best_ask:
                         if int(seconds_left * 10) % 20 == 0:
                             diff = btc_price_live - p_strike
-                            print(f"🔍 [CISNE NEGRO] BTC Diff: ${diff:.2f} | Evaluando la contra ({target_outcome}) a ${best_ask:.2f}")
+                            print(f"🔍 [BLACK SWAN] BTC Diff: ${diff:.2f} | Evaluating counter-trade ({target_outcome}) at ${best_ask:.2f}")
 
                         if 0.01 <= best_ask <= 0.02:
-                            p_entrada_sim = best_ask
-                            shares_sim = 20.0  
-                            costo_sim = shares_sim * p_entrada_sim
+                            sim_entry_price = best_ask
+                            sim_shares = 20.0  
+                            sim_cost = sim_shares * sim_entry_price
                             
-                            target_scalp = 0.25
+                            target_scalp = 0.25      # Target for full sale
                             max_bid_seen = 0.0 
 
-                            print(f"\n🚀 [FULL ENTRY] Comprando {shares_sim} shares de {target_outcome} a ${p_entrada_sim:.2f}")
-                            print(f"🎯 TARGET ÚNICO: ${target_scalp:.2f} (Venta Total)")
+                            print(f"\n🚀 [FULL ENTRY] Buying {sim_shares} shares of {target_outcome} at ${sim_entry_price:.2f}")
+                            print(f"🎯 SINGLE TARGET: ${target_scalp:.2f} (Full Sale)")
                             
                             trade_open = True
-                            token_activo = target_token_id 
+                            active_token = target_token_id 
                             token_outcome = target_outcome
                             
                         elif best_ask > 0.02:
-                            if int(seconds_left * 10) % 20 == 0: print(f"⚠️ [STALKING] Contra muy cara (${best_ask:.2f}). Esperando a 0.02...")
+                            if int(seconds_left * 10) % 20 == 0: print(f"⚠️ [STALKING] Counter-trade too expensive (${best_ask:.2f}). Waiting for 0.02...")
                 
                 elif int(seconds_left) % 10 == 0:
-                    print(f"⏳ {int(seconds_left)}s para cierre. BTC: ${btc_price_live:.2f} | Diff: ${abs(btc_price_live - p_strike):.2f}")
+                    print(f"⏳ {int(seconds_left)}s to close. BTC: ${btc_price_live:.2f} | Diff: ${abs(btc_price_live - p_strike):.2f}")
                 
-                time.sleep(0.2) 
+                time.sleep(0.1) 
 
+            # B. STATE: MONITORING EXIT
             elif trade_open:
-                current_bid, _ = get_raw_best_prices(token_activo)
+                current_bid, _ = get_raw_best_prices(active_token)
                 
                 if current_bid:
                     if current_bid > max_bid_seen:
                         max_bid_seen = current_bid
                 
-                # VENTA TOTAL SI TOCA 0.25
-                if current_bid and current_bid >= target_scalp:
-                    profit_total = (current_bid * shares_sim) - costo_sim
-                    simulated_balance += profit_total
-                    trades_ganados += 1 
+                # FULL SALE IF HITS 0.25
+                if not has_sold and current_bid and current_bid >= target_scalp:
+                    secured_profit = (current_bid * sim_shares) - sim_cost
+                    simulated_balance += secured_profit
+                    wins += 1 
                     
-                    print(f"\n💸 ¡PANIC SCALP EXITOSO! Vendiendo TODAS LAS {shares_sim} shares a ${current_bid:.2f} | Profit Limpio: +${profit_total:.2f}")
-                    log_trade(start_slot, token_outcome, shares_sim, p_entrada_sim, target_scalp, current_bid, max_bid_seen, profit_total, "FULL_PROFIT")
-                    test_count += 1
+                    has_sold = True
+                    actual_exit_price = current_bid
                     
-                    time.sleep(seconds_left + 5) 
-                    market_active = False; break
+                    print(f"\n💸 SUCCESSFUL PANIC SCALP! Sold at ${current_bid:.2f} | Profit: +${secured_profit:.2f}")
+                    print(f"👀 Monitoring Order Book until the end to record the true ceiling...")
+                    
+                    # Now the bot keeps looping, updating max_bid_seen.
                     
                 else:
-                    if int(seconds_left * 10) % 20 == 0:
-                        print(f"⏳ Acechando pánico (${target_scalp:.2f}) | Bid actual: ${current_bid} | Max Rebote Visto: ${max_bid_seen:.2f}")
+                    if not has_sold and int(seconds_left * 10) % 20 == 0:
+                        print(f"⏳ Stalking panic (${target_scalp:.2f}) | Current bid: ${current_bid} | Max Bounce: ${max_bid_seen:.2f}")
+                    elif has_sold and int(seconds_left * 10) % 50 == 0:
+                        print(f"📡 Recording silent data... | Ceiling detected so far: ${max_bid_seen:.2f} | {int(seconds_left)}s left")
                 
-                time.sleep(0.2)
+                time.sleep(0.1)
+
         except:
             time.sleep(1)
 
 print("\n" + "="*30)
-print(f"📊 RESULTADOS FINALES EXPERIMENTO FULL EXIT")
-print(f"Balance: ${simulated_balance:.2f} USDC | Ganados: {trades_ganados} | Perdidos: {trades_perdidos}")
+print(f"📊 FULL EXIT EXPERIMENT FINAL RESULTS")
+print(f"Balance: ${simulated_balance:.2f} USDC | Wins: {wins} | Losses: {losses}")
 print("="*30)
